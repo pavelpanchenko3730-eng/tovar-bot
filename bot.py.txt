@@ -1,0 +1,97 @@
+import asyncio
+import logging
+import json
+from aiogram import Bot, Dispatcher, Router, F
+from aiogram.filters import Command
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, CallbackQuery
+
+TOKEN = "9143420496:AAHi4b-h8HDrQg4hFa8AVBi1PsS10BcjnhQ"
+ADMIN_CHAT_ID = 2114795400  # Твой Telegram ID
+WEB_APP_URL = "https://твой-сайт.ru/index.html"  # <--- Сюда потом укажешь ссылку на index.html
+
+router = Router()
+
+@router.message(Command("start"))
+async def cmd_start(message: Message):
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📋 Открыть форму отчёта",
+                    web_app=WebAppInfo(url=WEB_APP_URL)
+                )
+            ]
+        ]
+    )
+    await message.answer(
+        "Привет! Нажми на кнопку ниже, чтобы заполнить отчёт по своему маршруту:",
+        reply_markup=keyboard
+    )
+
+# Обработка отчёта из Mini App
+@router.message()
+async def handle_web_app_data(message: Message):
+    if message.web_app_data:
+        try:
+            data = json.loads(message.web_app_data.data)
+            expert_name = data.get("expert")
+            task_type = data.get("task")
+            shop_name = data.get("shop")
+            comment = data.get("text")
+            start_time = data.get("start_time", "не указано")
+            end_time = data.get("end_time", "не указано")
+            user = message.from_user
+
+            report_text = (
+                f"📋 **Новый отчёт от товароведа!**\n\n"
+                f"👤 **Товаровед:** {expert_name} (@{user.username or 'нет юзернейма'})\n"
+                f"📌 **Вид работы:** {task_type}\n"
+                f"🏢 **Филиал:** {shop_name}\n"
+                f"⏱ **Начало:** {start_time} | **Окончание:** {end_time}\n"
+                f"🕒 **Дата отчёта:** {message.date.strftime('%d.%m.%Y')}\n\n"
+                f"💬 **Комментарий:**\n{comment}\n\n"
+                f"Status: 🟡 *Ожидает проверки*"
+            )
+
+            admin_keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(text="✅ Закрыть (принять)", callback_data="close_report"),
+                        InlineKeyboardButton(text="⚠️ Есть замечания", callback_data="has_issues")
+                    ]
+                ]
+            )
+
+            await message.bot.send_message(
+                chat_id=ADMIN_CHAT_ID,
+                text=report_text,
+                parse_mode="Markdown",
+                reply_markup=admin_keyboard
+            )
+
+            await message.answer("✅ Твой отчёт успешно отправлен администратору и ожидает проверки.")
+
+        except Exception as e:
+            logging.error(f"Ошибка: {e}")
+            await message.answer("❌ Произошла ошибка при обработке отчёта.")
+
+@router.callback_query(F.data == "close_report")
+async def close_report_callback(callback: CallbackQuery):
+    new_text = callback.message.text.replace("🟡 *Ожидает проверки*", "🟢 *Принят / Закрыт администратором*")
+    await callback.message.edit_text(text=new_text, parse_mode="Markdown", reply_markup=None)
+    await callback.answer("Отчёт успешно закрыт!")
+
+@router.callback_query(F.data == "has_issues")
+async def issues_report_callback(callback: CallbackQuery):
+    new_text = callback.message.text.replace("🟡 *Ожидает проверки*", "🔴 *Отправлен на доработку (есть замечания)*")
+    await callback.message.edit_text(text=new_text, parse_mode="Markdown", reply_markup=None)
+    await callback.answer("Отмечено: есть замечания.")
+
+async def main():
+    logging.basicConfig(level=logging.INFO)
+    bot = Bot(token=TOKEN)
+    dp = Dispatcher()
+    dp.include_router(router)
+    
+    await bot.delete_webhook(drop_pending_updates=True)
+    await

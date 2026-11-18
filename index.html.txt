@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отчёт товароведа</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            margin: 0;
+            padding: 16px;
+        }
+        h2 { font-size: 20px; margin-bottom: 16px; text-align: center; }
+        .form-group { margin-bottom: 14px; }
+        label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; color: var(--tg-theme-hint-color, #666); }
+        select, textarea, input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 14px;
+            box-sizing: border-box;
+            background: var(--tg-theme-secondary-bg-color, #f5f5f5);
+            color: var(--tg-theme-text-color, #000);
+        }
+        textarea { resize: vertical; height: 90px; }
+        .time-info { font-size: 13px; color: var(--tg-theme-hint-color, #888); margin-bottom: 14px; text-align: center; }
+        .btn {
+            background-color: var(--tg-theme-button-color, #2481cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Отчёт товароведа</h2>
+    <div class="time-info" id="startTimeDisplay">🕒 Начало работы: считываем...</div>
+
+    <div class="form-group">
+        <label for="expertName">Товаровед / Маршрут:</label>
+        <select id="expertName" onchange="updateShops()">
+            <option value="Нестеренко Илья">Нестеренко Илья</option>
+            <option value="Хасанзанов Эдуард / Шикалов Евгений">Хасанзанов Эдуард / Шикалов Евгений</option>
+            <option value="Коробков Александр">Коробков Александр</option>
+            <option value="Карасев Сергей">Карасев Сергей</option>
+            <option value="Медведев Артем">Медведев Артем</option>
+            <option value="Гольчевский Павел">Гольчевский Павел</option>
+            <option value="Атаджанов Максим">Атаджанов Максим</option>
+            <option value="Гайдаржи Руслан">Гайдаржи Руслан</option>
+            <option value="Эшмухамматов Хусниддин">Эшмухамматов Хусниддин</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="shopName">Филиал / Магазин:</label>
+        <select id="shopName">
+            <!-- Филиалы подставляются автоматически -->
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="taskType">Вид работы:</label>
+        <select id="taskType">
+            <option value="Выставление">Выставление</option>
+            <option value="Ротация">Ротация</option>
+            <option value="Проработка">Проработка</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="comment">Комментарий / Описание:</label>
+        <textarea id="comment" placeholder="Введите детали выполнения задачи..."></textarea>
+    </div>
+
+    <div class="form-group">
+        <label for="fileInput">Прикрепить фото / файл:</label>
+        <input type="file" id="fileInput" multiple accept="image/*,.pdf,.xlsx,.docx">
+    </div>
+
+    <button class="btn" onclick="submitReport()">Отправить отчёт</button>
+
+    <script>
+        let tg = window.Telegram.WebApp;
+        tg.expand();
+
+        const routesData = {
+            "Нестеренко Илья": [
+                "Москва, пр-кт Рязанский, д. 46",
+                "Московская обл г.Балашиха, Советская 2, пом VI",
+                "Москва, пр-кт Рязанский, д. 75 стр. 1",
+                "Москва, пр-кт Волгоградский, д. 46/15, стр. 3А",
+                "Москва, Вешняковская 24к1",
+                "Московская обл г.Котельники, Сосновая 5, к1, пом. 6",
+                "Московская обл г.Люберцы, Смирновская 18/20",
+                "Московская обл г.Люберцы, Смирновская 5"
+            ],
+            "Хасанзанов Эдуард / Шикалов Евгений": [
+                "Москва, ш Ленинградское, д. 8 к. 2 пом. 38/1",
+                "Москва, Куусинена 1, пом. 20/1",
+                "Москва, Грузинский Вал 26",
+                "Москва, Пресненский Вал 4/29",
+                "Москва, Маршала Бирюзова 17",
+                "Москва, Народного ополчения 41",
+                "Москва, Ярцевская 25а",
+                "Москва, б-р Осенний, д. 5 к. 1"
+            ],
+            "Коробков Александр": [
+                "Москва, Красного Маяка 2",
+                "Москва, пр-кт 60-летия Октября, д. 25 к. 1",
+                "Москва, Красного Маяка 4 к1",
+                "Москва, Чертановская 1Г",
+                "Москва, Новинки 1",
+                "Москва, пр-кт Новоясеневский, д. 2 с. 2",
+                "Москва, пр-кт Новоясеневский, д. 2 с. 2 (2)",
+                "Москва, Профсоюзная 128"
+            ],
+            "Карасев Сергей": [
+                "Москва, Генерала Белова 18Б",
+                "Москва, б-р Ореховый, д. 47/33",
+                "Москва, пр-кт Волгоградский, д. 121/35",
+                "Москва, Шоссейная 8",
+                "Москва, Братиславская 14",
+                "Москва, Новочеркасский 55",
+                "Москва, Краснодарская 57 к2",
+                "Москва, Краснодарская 57 к2, пом 4/1"
+            ],
+            "Медведев Артем": [
+                "Московская обл г.Королев, Калинина 2",
+                "Московская обл г.Мытищи, пр-д Шараповский, д. 11",
+                "Москва, Уральская 1",
+                "Москва, ш Щёлковское, д. 54",
+                "Москва, ш Открытое, д. 5/11",
+                "Москва, 3-я Парковая 4",
+                "Москва, 9-я Парковая 25 пом 4/1",
+                "Москва, 9-я Парковая 61/1"
+            ],
+            "Гольчевский Павел": [
+                "Москва, Грекова 10",
+                "Москва, Декабристов 20 к1",
+                "Москва, Енисейская 19",
+                "Москва, Менжинского 32 к3",
+                "Московская обл г.Лобня, Ленина 19 к1",
+                "Москва, ш Алтуфьевское, д. 86",
+                "Москва, Плещеева 8"
+            ],
+            "Атаджанов Максим": [
+                "Московская обл г.Красногорск, Железнодорожная 1 к3",
+                "Московская обл г.Красногорск, б-р Подмосковный, д. 8",
+                "Москва, б-р Кронштадский, д. 7",
+                "Москва, пр-д Стратонавтов, д. 9",
+                "Москва, Героев Панфиловцев 1 к1",
+                "Московская обл г.Химки, Московская 3",
+                "Москва, пр-д Новотушинский, д. 6 к. 1",
+                "Москва, Фестивальная 2а"
+            ],
+            "Гайдаржи Руслан": [
+                "Москва, Новокосинская 35",
+                "Москва, пр-кт Свободный, д. 33А",
+                "Москва, ш Энтузиастов 22/18 помещ. 5/1",
+                "Московская обл г.Балашиха, Советская 8",
+                "Московская обл г.Балашиха, Советская 12"
+            ],
+            "Эшмухамматов Хусниддин": [
+                "Москва, Фридриха Энгельса 3/5 ст2",
+                "Москва, Мастеркова 3",
+                "Москва, Южнопортовая 18, пом 9/1",
+                "Москва, Новокузнецкая 43/16, стр. 2, пом. 2/1",
+                "Москва, пр-кт Пролетарский, д. 23а",
+                "Москва, 2-я Владимирская 41 к1",
+                "Москва, Большая Семеновская 26, стр 7",
+                "Москва, пер. 3й Крутицкий, 18 пом. 1/1"
+            ]
+        };
+
+        function updateShops() {
+            let expertSelect = document.getElementById('expertName');
+            let shopSelect = document.getElementById('shopName');
+            let selectedExpert = expertSelect.value;
+
+            shopSelect.innerHTML = "";
+            let shops = routesData[selectedExpert] || [];
+            shops.forEach(shop => {
+                let option = document.createElement('option');
+                option.value = shop;
+                option.textContent = shop;
+                shopSelect.appendChild(option);
+            });
+        }
+
+        let startTime = new Date();
+        document.getElementById('startTimeDisplay').innerText = 
+            `🕒 Начало работы: ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+        updateShops();
+
+        function submitReport() {
+            let expertName = document.getElementById('expertName').value;
+            let shopName = document.getElementById('shopName').value;
+            let taskType = document.getElementById('taskType').value;
+            let comment = document.getElementById('comment').value;
+
+            if (!comment.trim()) {
+                alert("Пожалуйста, заполните комментарий к отчёту!");
+                return;
+            }
+
+            let endTime = new Date();
+            let formatTime = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            let reportData = {
+                expert: expertName,
+                task: taskType,
+                shop: shopName,
+                text: comment,
+                start_time: formatTime(startTime),
+                end_time: formatTime(endTime)
+            };
+
+            tg.sendData(JSON.stringify(reportData));
+            tg.close();
+        }
+    </script>
+</body>
+</html>
